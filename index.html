@@ -295,10 +295,27 @@ function showProgress() {
   const pct = total ? Math.round(done / total * 100) : 0;
   loadingEl.textContent = 'LOADING ' + pct + '%';
 }
-function loadGLB(file) {
+// 동시 다운로드 4개 제한 + 실패 시 재시도 (모바일·불안정한 망에서 끊김 방지)
+const LOAD_PARALLEL = 4, LOAD_RETRIES = 4;
+let loadActive = 0; const loadQueue = [];
+function loadSlot() { return new Promise(res => { const go = () => { loadActive++; res(); }; if (loadActive < LOAD_PARALLEL) go(); else loadQueue.push(go); }); }
+function loadRelease() { loadActive--; const next = loadQueue.shift(); if (next) next(); }
+async function loadGLB(file) {
   loadProg[file] = { l: 0, t: 1 };
-  return loader.loadAsync(MODEL_DIR + file, ev => { if (ev.lengthComputable) { loadProg[file] = { l: ev.loaded, t: ev.total }; showProgress(); } })
-    .then(g => { loadProg[file].l = loadProg[file].t; showProgress(); return g.scene; });
+  await loadSlot();
+  try {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        const g = await loader.loadAsync(MODEL_DIR + file + (attempt > 1 ? '?r=' + attempt : ''), ev => { if (ev.lengthComputable) { loadProg[file] = { l: ev.loaded, t: ev.total }; showProgress(); } });
+        loadProg[file].l = loadProg[file].t; showProgress();
+        return g.scene;
+      } catch (err) {
+        if (attempt >= LOAD_RETRIES) throw err;
+        console.warn('retry', file, attempt, err && err.message);
+        await new Promise(r => setTimeout(r, 400 * attempt));
+      }
+    }
+  } finally { loadRelease(); }
 }
 if (location.protocol === 'file:') loadingEl.innerHTML = '이 게임은 웹 주소(http)로 열어야 합니다.<br><small style="opacity:.7">더블클릭 실행은 지원하지 않습니다</small>';
 // 바운딩 박스 기준 정규화: 높이 1 (건물·신호등) 또는 길이 1 (차량, 긴 축을 z로)
