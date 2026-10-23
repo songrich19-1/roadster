@@ -152,9 +152,28 @@ const MAX_SPEED= 125;                // 절대 최고 (2단), m/s ≈ 450 km/h
 const GEAR_PERF = [ { accel: 20, max: 65 }, { accel: 30, max: 95 }, { accel: 42, max: 125 } ];
 
 /* ═══════════════════ 렌더러 / 씬 / 카메라 ═══════════════════ */
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// 적응형 품질: 렌더 해상도 배율과 그림자를 프레임에 따라 자동 조절 (화면 크기는 그대로, 내부 해상도만 변경)
+const QUALITY = [ { s: 1.0, shadow: true }, { s: 0.85, shadow: true }, { s: 0.7, shadow: true }, { s: 0.58, shadow: false }, { s: 0.5, shadow: false } ];
+const BASE_PR = Math.min(devicePixelRatio, 1.25);      // 고해상도 모니터·폰에서도 1.25배까지만
+let qLevel = 0, qFrames = 0, qTime = 0, qCooldown = 2;
+function applyQuality() {
+  const q = QUALITY[qLevel];
+  renderer.setPixelRatio(BASE_PR * q.s);
+  renderer.setSize(innerWidth, innerHeight);
+  sunLight.castShadow = q.shadow;
+  window.__q = qLevel;   // 디버그용
+}
+renderer.setPixelRatio(BASE_PR);
 renderer.setSize(innerWidth, innerHeight);
+function updateQuality(dt) {
+  qFrames++; qTime += dt; qCooldown -= dt;
+  if (qTime < 1.5) return;
+  const fps = qFrames / qTime; qFrames = 0; qTime = 0;
+  if (qCooldown > 0) return;
+  if (fps < 28 && qLevel < QUALITY.length - 1) { qLevel++; applyQuality(); qCooldown = 3; }
+  else if (fps > 57 && qLevel > 0) { qLevel--; applyQuality(); qCooldown = 5; }
+}
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;      // Soft 보다 가벼움
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1364,7 +1383,8 @@ const clock = new THREE.Clock();
 let elapsed = 0;
 function loop() {
   requestAnimationFrame(loop);
-  const dt = Math.min(clock.getDelta(), 0.05); elapsed += dt;
+  const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05); elapsed += dt;
+  updateQuality(rawDt);
   if (INTRO.active) {                                      // 타이틀: 카메라가 차를 돌며 비춤 (통행 차량 없음)
     updateIntro(dt);
     updateJets(dt);
@@ -1404,7 +1424,7 @@ if (/Instagram|FBAN|FBAV|KAKAOTALK|NAVER\(inapp/i.test(navigator.userAgent)) {
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
+  applyQuality();
 });
 </script>
 </body>
