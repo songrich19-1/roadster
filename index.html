@@ -188,7 +188,6 @@ function applyQuality() {
   const viewDist = Q.view * BLOCK;                                   // 보이는 거리에 맞춰 안개도 조절 (멀리서 갑자기 나타나지 않게)
   scene.fog.far = Math.min(1400, viewDist + 100); scene.fog.near = Math.min(150, scene.fog.far * 0.35);
   for (const r of recyclers) if (r.lod) for (const tile of r.list) { for (const b of tile.userData.back) b.visible = Q.back; tile.userData.far = null; }
-  window.__q = qLevel;   // 디버그용
 }
 renderer.setPixelRatio(BASE_PR * QUALITY[qLevel].s);
 renderer.setSize(innerWidth, innerHeight);
@@ -395,7 +394,6 @@ const T = { buildings: [], buildingsLow: [], cars: [], light: null };   // 정�
 const recyclers = [];
 const RECYCLE_AHEAD = 70;
 const BLOCK = 120, CROSS_W = 16, SEG = BLOCK - CROSS_W, TILES = 7;   // 타일 7개 = 840m 순환 (품질 단계에 따라 먼 타일은 숨김)
-const LOD_DIST = 230;     // 타일 중심이 이보다 멀면 가벼운 건물 모델로 전환 (m)
 const walkMat  = new THREE.MeshStandardMaterial({ color: 0xa9a6a0, roughness: 1 });
 const curbMat  = new THREE.MeshStandardMaterial({ color: 0x8d8a84, roughness: 1 });
 const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.8 });
@@ -565,7 +563,6 @@ async function loadCity() {
   T.buildings = bl; T.buildingsLow = bo; T.cars = cl;
   cl.forEach((t, i) => { t.userData.front = CAR_FRONT[i] ?? 1; });
   T.light = lt; analyzeLight(T.light);
-  window.__T = T; window.__R = renderer; window.__scene = scene;   // 디버그용
   console.log('city models', bl.length, cl.length, !!T.light, T.light && T.light.userData.size);
   const list = [], span = TILES * BLOCK, behind = BLOCK + 25;   // 타일 앞끝이 차 뒤 (BLOCK+25)m 를 넘어야 재배치 → 내용 전체가 지나간 뒤
   for (let i = 0; i < TILES; i++) {
@@ -584,7 +581,6 @@ const TRAFFIC_PER_DIR = 4;             // 방향당 차량 수 (앞 약 450m 에
 const TRAFFIC_AHEAD = 450;
 const traffic = [];                    // {obj, lane, dir(-1 전방/+1 역방향), hl, hw, dyn, respawnT}
 const trafficGroup = new THREE.Group(); scene.add(trafficGroup);
-window.__traffic = traffic;   // 디버그용
 function trafficLaneFree(lane, z, self) {
   for (const t of traffic) if (t !== self && t.lane === lane && Math.abs(t.obj.position.z - z) < 45) return false;
   return true;
