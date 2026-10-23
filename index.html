@@ -152,11 +152,20 @@ const MAX_SPEED= 125;                // 절대 최고 (2단), m/s ≈ 450 km/h
 const GEAR_PERF = [ { accel: 20, max: 65 }, { accel: 30, max: 95 }, { accel: 42, max: 125 } ];
 
 /* ═══════════════════ 렌더러 / 씬 / 카메라 ═══════════════════ */
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// 저사양 모드 (?lite): 안티앨리어싱 끔, 해상도 60%, 그림자 끔, 건물·거리·파티클 축소. 최저 품질에서도 느리면 자동 전환
+const PARAMS = new URLSearchParams(location.search);
+const LITE = PARAMS.has('lite') || sessionStorage.getItem('roadster.lite') === '1';
+const DEBUG = PARAMS.has('debug');
+const renderer = new THREE.WebGLRenderer({ antialias: !LITE, powerPreference: 'high-performance' });
 // 적응형 품질: 렌더 해상도 배율과 그림자를 프레임에 따라 자동 조절 (화면 크기는 그대로, 내부 해상도만 변경)
-const QUALITY = [ { s: 1.0, shadow: true }, { s: 0.85, shadow: true }, { s: 0.7, shadow: true }, { s: 0.58, shadow: false }, { s: 0.5, shadow: false } ];
-const BASE_PR = Math.min(devicePixelRatio, 1.25);      // 고해상도 모니터·폰에서도 1.25배까지만
-let qLevel = 0, qFrames = 0, qTime = 0, qCooldown = 2;
+const QUALITY = LITE
+  ? [ { s: 0.6, shadow: false }, { s: 0.5, shadow: false }, { s: 0.42, shadow: false } ]
+  : [ { s: 1.0, shadow: true }, { s: 0.85, shadow: true }, { s: 0.7, shadow: true }, { s: 0.58, shadow: false }, { s: 0.5, shadow: false } ];
+const BASE_PR = Math.min(devicePixelRatio, LITE ? 1 : 1.25);      // 고해상도 모니터·폰에서도 1.25배까지만
+let qLevel = 0, qFrames = 0, qTime = 0, qCooldown = 5, slowTime = 0;   // 로딩 직후 5초는 측정 제외
+// GPU 정보: 소프트웨어 렌더링(SwiftShader)이면 하드웨어 가속 안내
+const GPU_NAME = (() => { try { const gl = renderer.getContext(), d = gl.getExtension('WEBGL_debug_renderer_info'); return d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : 'unknown'; } catch (e) { return 'unknown'; } })();
+const SOFTWARE_GPU = /SwiftShader|Software|llvmpipe|Basic Render/i.test(GPU_NAME);
 function applyQuality() {
   const q = QUALITY[qLevel];
   renderer.setPixelRatio(BASE_PR * q.s);
@@ -166,13 +175,26 @@ function applyQuality() {
 }
 renderer.setPixelRatio(BASE_PR);
 renderer.setSize(innerWidth, innerHeight);
+let lastFps = 0;
 function updateQuality(dt) {
   qFrames++; qTime += dt; qCooldown -= dt;
   if (qTime < 1.5) return;
-  const fps = qFrames / qTime; qFrames = 0; qTime = 0;
+  const fps = qFrames / qTime; qFrames = 0; qTime = 0; lastFps = fps;
   if (qCooldown > 0) return;
   if (fps < 28 && qLevel < QUALITY.length - 1) { qLevel++; applyQuality(); qCooldown = 3; }
   else if (fps > 57 && qLevel > 0) { qLevel--; applyQuality(); qCooldown = 5; }
+  // 최저 품질인데도 느리면 (6초 이상 22fps 미만) 저사양 모드로 자동 재시작 (세션당 1회)
+  if (!LITE && qLevel === QUALITY.length - 1 && fps < 22) { slowTime += 1.5; if (slowTime >= 6 && !sessionStorage.getItem('roadster.lite')) { sessionStorage.setItem('roadster.lite', '1'); location.reload(); } }
+  else slowTime = 0;
+}
+// 디버그 표시 (?debug): fps / GPU / 해상도 배율 / 품질 단계 / 삼각형·드로우콜
+const dbgEl = document.createElement('div');
+dbgEl.style.cssText = 'position:fixed;left:50%;top:8px;transform:translateX(-50%);font:12px/1.5 monospace;color:#0f0;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:6px;z-index:20;pointer-events:none;white-space:pre;display:' + (DEBUG ? 'block' : 'none');
+document.body.appendChild(dbgEl);
+function updateDebug() {
+  if (!DEBUG) return;
+  const i = renderer.info.render;
+  dbgEl.textContent = `fps ${lastFps.toFixed(0)}  |  ${LITE ? 'LITE' : 'normal'} q${qLevel}  pr ${renderer.getPixelRatio().toFixed(2)}  ${innerWidth}x${innerHeight} dpr ${devicePixelRatio}\ntri ${(i.triangles / 1000).toFixed(0)}k  calls ${i.calls}\nGPU ${GPU_NAME}`;
 }
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;      // Soft 보다 가벼움
@@ -181,9 +203,9 @@ renderer.toneMappingExposure = 1.05;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(HAZE, 150, 1400);
+scene.fog = new THREE.Fog(HAZE, LITE ? 100 : 150, LITE ? 650 : 1400);
 
-const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, 2000);
+const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.1, LITE ? 700 : 2000);
 
 /* ═══════════════════ 조명 (맑은 한낮) ═══════════════════ */
 const sunLight = new THREE.DirectionalLight(0xfff3df, 2.2);
@@ -236,7 +258,7 @@ const skyMat = new THREE.ShaderMaterial({
       #include <colorspace_fragment>
     }`,
 });
-const skyGeo = new THREE.SphereGeometry(1800, 48, 24);
+const skyGeo = new THREE.SphereGeometry(LITE ? 600 : 1800, 48, 24);   // 카메라 가시거리 안에 들어오도록
 const sky = new THREE.Mesh(skyGeo, skyMat);
 sky.frustumCulled = false;
 scene.add(sky);
@@ -358,7 +380,7 @@ const T = { buildings: [], buildingsLow: [], cars: [], light: null };   // 정�
 /* ═══════════════════ 도심 블록 타일 (순환) ═══════════════════ */
 const recyclers = [];
 const RECYCLE_AHEAD = 70;
-const BLOCK = 120, CROSS_W = 16, SEG = BLOCK - CROSS_W, TILES = 7;   // 타일 수를 줄여 부하 감소 (840m 순환)
+const BLOCK = 120, CROSS_W = 16, SEG = BLOCK - CROSS_W, TILES = LITE ? 5 : 7;   // 타일 수 (저사양 5 = 600m 순환)
 const LOD_DIST = 230;     // 타일 중심이 이보다 멀면 가벼운 건물 모델로 전환 (m)
 const walkMat  = new THREE.MeshStandardMaterial({ color: 0xa9a6a0, roughness: 1 });
 const curbMat  = new THREE.MeshStandardMaterial({ color: 0x8d8a84, roughness: 1 });
@@ -416,8 +438,8 @@ function buildTile() {
       g.add(b);
       z -= w + 1.2;
     }
-    // 뒷줄: 더 높은 건물들 (스카이라인)
-    let zb = 5 + Math.random() * 10;
+    // 뒷줄: 더 높은 건물들 (스카이라인) — 저사양 모드에서는 생략
+    let zb = LITE ? -BLOCK - 1 : 5 + Math.random() * 10;
     while (zb > -BLOCK) {
       const idx = (Math.random() * T.buildings.length) | 0;
       const tpl = T.buildingsLow[idx] || T.buildings[idx];              // 뒷줄은 항상 경량 모델
@@ -892,7 +914,7 @@ const jetGlows = [];
     s.position.set(x, y - 0.3, z); s.scale.setScalar(0.001); car.visual.add(s); jetGlows.push(s);
   }
 }
-const N_P = 4000;
+const N_P = LITE ? 1500 : 4000;
 const pPos = new Float32Array(N_P * 3), pSize = new Float32Array(N_P), pAlpha = new Float32Array(N_P), pGrey = new Float32Array(N_P);
 const pVel = new Float32Array(N_P * 3), pAge = new Float32Array(N_P).fill(99), pLife = new Float32Array(N_P).fill(1);
 const pGeo = new THREE.BufferGeometry();
@@ -1384,7 +1406,7 @@ let elapsed = 0;
 function loop() {
   requestAnimationFrame(loop);
   const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05); elapsed += dt;
-  updateQuality(rawDt);
+  updateQuality(rawDt); updateDebug();
   if (INTRO.active) {                                      // 타이틀: 카메라가 차를 돌며 비춤 (통행 차량 없음)
     updateIntro(dt);
     updateJets(dt);
@@ -1414,6 +1436,19 @@ if (location.protocol !== 'file:') loadCity().then(() => {
   loadingEl.style.opacity = 0; setTimeout(() => loadingEl.remove(), 700);
 }).catch(err => { console.error('city load failed', err); loadingEl.innerHTML = '모델을 불러오지 못했습니다.<br><small style="opacity:.7">인터넷 연결을 확인하고 새로고침해 주세요</small>'; });
 
+// 하드웨어 가속이 꺼진 크롬(소프트웨어 렌더링) 안내
+if (SOFTWARE_GPU) {
+  const b = document.createElement('div');
+  b.style.cssText = 'position:fixed;left:50%;top:14px;transform:translateX(-50%);background:rgba(160,20,20,.85);color:#fff;font-size:12px;letter-spacing:.5px;padding:8px 14px;border-radius:8px;z-index:9;pointer-events:none;text-align:center;line-height:1.5';
+  b.innerHTML = '그래픽 가속이 꺼져 있어 느립니다.<br>크롬 설정 → 시스템 → <b>그래픽 가속 사용</b> 켜고 다시 열어 주세요';
+  document.body.appendChild(b);
+}
+// 저사양 모드 표시
+if (LITE) {
+  const b = document.createElement('div');
+  b.style.cssText = 'position:fixed;left:50%;bottom:8px;transform:translateX(-50%);color:rgba(255,255,255,.55);font-size:11px;letter-spacing:2px;z-index:9;pointer-events:none';
+  b.textContent = 'LITE MODE'; document.body.appendChild(b);
+}
 // 인스타그램·페이스북 내장 브라우저 안내 (성능·소리 제한이 있을 수 있음)
 if (/Instagram|FBAN|FBAV|KAKAOTALK|NAVER\(inapp/i.test(navigator.userAgent)) {
   const b = document.createElement('div');
