@@ -584,15 +584,18 @@ const TRAFFIC_PER_DIR = 4;             // 방향당 차량 수 (앞 약 450m 에
 const TRAFFIC_AHEAD = 450;
 const traffic = [];                    // {obj, lane, dir(-1 전방/+1 역방향), hl, hw, dyn, respawnT}
 const trafficGroup = new THREE.Group(); scene.add(trafficGroup);
+window.__traffic = traffic;   // 디버그용
 function trafficLaneFree(lane, z, self) {
   for (const t of traffic) if (t !== self && t.lane === lane && Math.abs(t.obj.position.z - z) < 45) return false;
   return true;
 }
+// 생성 거리: 기본 450m, 빠를수록 멀리 (약 6초 이동 거리, 최대 1600m) — 1000km/h 에서도 앞에 차가 계속 보이도록
+const trafficAhead = () => Math.min(1600, Math.max(TRAFFIC_AHEAD, Math.abs(st.v) * 6));
 function spawnTraffic(t, ahead) {
   const lanes = t.dir < 0 ? [2, 3] : [0, 1];
   for (let k = 0; k < 8; k++) {
     const lane = lanes[(Math.random() * 2) | 0];
-    const z = ahead ? st.z - TRAFFIC_AHEAD * (0.35 + Math.random() * 0.75) : st.z + 70 + Math.random() * 40;
+    const z = ahead ? st.z - trafficAhead() * (0.35 + Math.random() * 0.75) : st.z + 70 + Math.random() * 40;
     if (!trafficLaneFree(lane, z, t)) continue;
     if (!ahead && lane === nearestLane(st.x)) continue;     // 뒤에서 다시 나올 땐 내 차로는 피함
     t.lane = lane; t.obj.position.set(LANE_X[lane], 0, z); t.obj.rotation.set(0, carYawFor(t.tpl, t.dir), 0);
@@ -630,7 +633,7 @@ function updateTraffic(dt) {
     t.obj.position.z += t.vz * dt;
     const rel = t.obj.position.z - st.z;                     // +면 내 뒤
     if (rel > 60) spawnTraffic(t, true);                     // 지나친 차 → 앞에 다시
-    else if (rel < -(TRAFFIC_AHEAD + 150)) spawnTraffic(t, false);   // 너무 앞서간 순방향 차 → 뒤에서 다시
+    else if (rel < -(trafficAhead() + 150)) spawnTraffic(t, false);   // 너무 앞서간 순방향 차 → 뒤에서 다시
   }
 }
 
