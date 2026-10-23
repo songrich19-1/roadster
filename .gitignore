@@ -1,0 +1,15 @@
+# 원본·중간 산출물 (용량 큼) — 게임 실행에 필요 없음
+assets/city/raw/
+assets/city/opt/
+assets/city/opt0/
+assets/city/tex/
+assets/city/test/
+assets/roadster/
+assets/*.png
+# 예전 base64 패키징 (더 이상 사용하지 않음)
+city_models.js
+roadster_glb.js
+/roadster.glb
+bg_images.js
+# 로컬 도구
+.claude/
