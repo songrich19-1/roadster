@@ -26,26 +26,31 @@
   #touch { position: fixed; inset: 0; pointer-events: none; z-index: 6; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
   body.notouch #touch, body.intro #touch { display: none; }
   body:not(.notouch) #help { display: none; }
-  .tc { position: absolute; width: 82px; height: 82px; border-radius: 50%; border: 2px solid rgba(255,255,255,.7); background: rgba(0,0,0,.32); color: #fff; font: 700 26px/1 "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; backdrop-filter: blur(2px); }
+  /* 버튼 한 개의 크기 --u 를 화면 비율로 계산: 너비의 11%·높이의 12% 중 작은 값, 46~82px 사이. 모든 위치는 --u 의 배수 */
+  :root { --u: clamp(46px, min(11vw, 12vh), 82px); }
+  .tc { position: absolute; width: var(--u); height: var(--u); border-radius: 50%; border: 2px solid rgba(255,255,255,.7); background: rgba(0,0,0,.32); color: #fff; font: 700 calc(var(--u) * .32)/1 "Segoe UI", system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; backdrop-filter: blur(2px); box-sizing: border-box; }
   .tc.on { background: rgba(255,80,60,.75); border-color: #fff; transform: scale(.94); }
-  .tc small { font-size: 12px; letter-spacing: 1px; margin-top: 3px; font-weight: 400; opacity: .85; }
-  .tc.sq { border-radius: 12px; width: 64px; height: 64px; font-size: 22px; flex-direction: column; }
+  .tc small { font-size: calc(var(--u) * .14); letter-spacing: 1px; margin-top: 2px; font-weight: 400; opacity: .85; white-space: nowrap; }
+  .tc.sq { border-radius: calc(var(--u) * .15); width: calc(var(--u) * .78); height: calc(var(--u) * .78); font-size: calc(var(--u) * .27); }
   /* 왼쪽: 주행 (W 위, A 왼쪽, D 오른쪽, S 아래) */
-  #tW { left: 104px; bottom: 196px; }
-  #tA { left: 18px;  bottom: 107px; }
-  #tD { left: 190px; bottom: 107px; }
-  #tS { left: 104px; bottom: 18px; }
+  #tW { left: calc(var(--u) * 1.25); bottom: calc(var(--u) * 2.4 + env(safe-area-inset-bottom, 0px)); }
+  #tA { left: calc(var(--u) * 0.2);  bottom: calc(var(--u) * 1.3 + env(safe-area-inset-bottom, 0px)); }
+  #tD { left: calc(var(--u) * 2.3);  bottom: calc(var(--u) * 1.3 + env(safe-area-inset-bottom, 0px)); }
+  #tS { left: calc(var(--u) * 1.25); bottom: calc(var(--u) * 0.2 + env(safe-area-inset-bottom, 0px)); }
   /* 오른쪽: 비행 (↑ 위, ← → 양옆, ↓ 아래) */
-  #tUp { right: 104px; bottom: 196px; }
-  #tL  { right: 190px; bottom: 107px; }
-  #tR  { right: 18px;  bottom: 107px; }
-  #tDn { right: 104px; bottom: 18px; }
-  /* E 단수: W 오른쪽 옆 (간격 띄움) / M 음소거 / R 처음 (오른쪽 위) */
-  #tE { left: 218px; bottom: 206px; }
-  #tM { right: 18px; top: 82px; }
-  #tRst { right: 18px; top: 160px; }
-  body:not(.notouch) #hud { bottom: 290px; }
-  body:not(.notouch) #speed { font-size: 48px; }
+  #tUp { right: calc(var(--u) * 1.25); bottom: calc(var(--u) * 2.4 + env(safe-area-inset-bottom, 0px)); }
+  #tL  { right: calc(var(--u) * 2.3);  bottom: calc(var(--u) * 1.3 + env(safe-area-inset-bottom, 0px)); }
+  #tR  { right: calc(var(--u) * 0.2);  bottom: calc(var(--u) * 1.3 + env(safe-area-inset-bottom, 0px)); }
+  #tDn { right: calc(var(--u) * 1.25); bottom: calc(var(--u) * 0.2 + env(safe-area-inset-bottom, 0px)); }
+  /* E 단수: W 오른쪽 옆 (간격 띄움) / M 음소거 / R 처음 (오른쪽 위, 토글 아래) */
+  #tE { left: calc(var(--u) * 2.55); bottom: calc(var(--u) * 2.52 + env(safe-area-inset-bottom, 0px)); }
+  #tM { right: calc(var(--u) * 0.22); top: calc(74px + env(safe-area-inset-top, 0px)); }
+  #tRst { right: calc(var(--u) * 0.22); top: calc(74px + var(--u) * 0.95 + env(safe-area-inset-top, 0px)); }
+  body:not(.notouch) #hud { bottom: calc(var(--u) * 3.6 + 8px + env(safe-area-inset-bottom, 0px)); left: 16px; }
+  body:not(.notouch) #speed { font-size: clamp(30px, calc(var(--u) * .6), 48px); }
+  body:not(.notouch) #title { display: none; }
+  /* 좁은 화면: 상단 토글·타이틀 글자 축소 */
+  @media (max-width: 480px) { #ctlToggle { width: 42px; height: 42px; top: 12px; right: 12px; } .in-title { letter-spacing: 8px; } #startBtn { padding: 14px 44px; font-size: 19px; } }
 
   /* ─── 인트로 (시험대) 타이틀 ─── */
   body.intro #hud, body.intro #help, body.intro #title { display: none; }
