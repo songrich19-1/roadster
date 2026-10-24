@@ -2,3 +2,5 @@
 assets/originals_higgsfield/
 # 로컬 미리보기 서버 설정
 .claude/
+# 메모 (저장소에 올리지 않음)
+게임_재현_프롬프트.md
